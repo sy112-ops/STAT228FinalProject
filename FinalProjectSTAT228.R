@@ -21,6 +21,7 @@ mh.numeric <- mh.clean[,numeric_col]
 numeric_cols <- colnames(mh.numeric)
 
 #VIF Screening 
+library(usdm)
 vifstep(mh.numeric, th = 10) #No predictors violate multicollinearity
 
 # Identify categorical columns (Factors/Characters)
@@ -35,6 +36,18 @@ library(biotools)
 numeric_final <- final.df[, sapply(final.df, is.numeric)]
 box_m_test <- boxM(numeric_final, final.df$Risk)
 box_m_test #LDA is better than QDA because p-value = 0.3294
+
+# Check 'Anxiety_Score' normality for each Risk group
+high_risk <- final.df[final.df$Risk == "High", "Anxiety_Score"]
+low_risk  <- final.df[final.df$Risk == "Low", "Anxiety_Score"]
+
+par(mfrow=c(1,2)) # Side-by-side plots
+qqnorm(high_risk, main="Q-Q: High Risk"); qqline(high_risk, col="red")
+qqnorm(low_risk, main="Q-Q: Low Risk"); qqline(low_risk, col="blue")
+
+
+
+
 
 
 #Train/Test Data
@@ -51,7 +64,7 @@ summary(logit.model)
 logit.probs = predict(logit.model, newdata = test.df, type = "response")
 logit.pred = factor(ifelse(logit.probs >0.25, "High", "Low"))
 
-table(logit.pred, test.df$Risk)
+conf_matrix_logit = table(logit.pred, test.df$Risk)
 
 
 #LDA and QDA model
@@ -65,5 +78,55 @@ conf_matrix_lda <- table(lda.pred, test.df$Risk)
 qda.model <- qda(Risk~., data = train.df)
 qda.pred = predict(qda.model, newdata = test.df)$class
 conf_matrix_qda = table(qda.pred, test.df$Risk)
+
+
+
+
+
+
+
+
+
+
+#Performance Metrics
+#Accuracy 
+logit_acc = sum(diag(conf_matrix_logit))/sum(conf_matrix_logit) #0.5972222
+lda_acc = sum(diag(conf_matrix_lda))/sum(conf_matrix_lda) #0.7138889
+qda_acc = sum(diag(conf_matrix_qda))/sum(conf_matrix_qda) #0.6333333
+
+
+
+
+#ROC-AUC 
+library('pROC')
+numeric_pred = as.numeric(as.character(logit.pred))
+plot(roc(test.df$Risk, logit.pred))
+logit_auc = auc(test.df$Risk, logit.pred)
+plot(roc(test.df$Risk, lda.pred))
+lda_auc = auc(test.df$Risk, lda.pred)
+plot(roc(test.df$Risk, qda.pred))
+qda_auc = auc(test.df$Risk, qda.pred)
+
+#Recall
+recall_logit = diag(conf_matrix_logit)/rowSums(conf_matrix_logit)
+recall_lda = diag(conf_matrix_lda)/rowSums(conf_matrix_lda)
+recall_qda = diag(conf_matrix_qda)/rowSums(conf_matrix_qda)
+
+
+
+
+#F1-score
+library(caret)
+conf_logit = confusionMatrix(logit.pred, test.df$Risk, mode = "everything")
+f1_logit = conf_logit$Class["F1"]
+
+conf_lda = confusionMatrix(lda.pred, test.df$Risk, mode = "everything")
+f1_lda = conf_lda$Class["F1"]
+
+conf_qda = confusionMatrix(qda.pred, test.df$Risk, mode = "everything")
+f1_qda = conf_qda$Class['F1']
+
+
+
 
 
